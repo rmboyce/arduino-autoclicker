@@ -1,6 +1,6 @@
 # arduino-autoclicker
 
-This is code for the Arduino Leonardo which extends the capabilities of a normal mouse. The Clickotron-5000 autoclicking device uses a Leonardo, a USB Host Shield board, and my custom board on top, with my code loaded on the Arduino. 
+This is code for the Arduino Leonardo which extends the capabilities of a normal mouse. The Clickotron-5000 autoclicking device uses a Leonardo, a USB Host Shield board, and my custom board on top, with this code loaded on the Arduino. 
 
 More details: [Clickotron-5000](https://www.google.com)
 
