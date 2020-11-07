@@ -23,17 +23,17 @@ const int rightPedalPin = 13;
 
 const int ledPin = 13;
 
-const int autoClickLedPin = 0;
-const int leftClickLedPin = 1;
-const int rightClickLedPin = 2;
+const int autoClickLedPin = 1;
+const int leftClickLedPin = 2;
+const int rightClickLedPin = 0;
 
-const int potPin = 0;
+const int potPin = 5;
 const int maxSSPin = 11;
 
-// Opcodes for the MAX7221 and MAX7219
+//Opcodes for the MAX7221 and MAX7219
 const uint16_t OP_NOOP = 0;
 const uint16_t OP_DIGIT0 = 1;
-// note: all OP_DIGITn are +n offsets from OP_DIGIT0
+//Note: all OP_DIGITn are +n offsets from OP_DIGIT0
 const uint16_t OP_DIGIT1 = 2;
 const uint16_t OP_DIGIT2 = 3;
 const uint16_t OP_DIGIT3 = 4;
@@ -55,15 +55,22 @@ uint32_t lastRightPressTime = 0;
 bool leftPedalPressed = false;
 bool rightPedalPressed = false;
 
+//Iterator for stepping through the list of click times (for the autoclick mode)
 int iterator = 0;
 
+//The start time of when the user presses both pedals, for switching from normal mode to autoclick mode
 uint32_t startSwitchTime = 0;
 
-int potRead = 0;
-int oldPotRead = 0;
+//Potentiometer reads
+int potRead = 200;
+int oldPotRead = 200;
+
+//Speed of the autoclicking
+double clickSpeed = 4.8;
+const double ARRAY_CLICK_SPEED = 4.7;
 
 //TEST
-int testDisplay = 0;
+//int testDisplay = 0;
 
 class MouseRptParser : public MouseReportParser
 {
@@ -138,12 +145,12 @@ void setup()
   sendData(OP_DECODEMODE, 0xff);
   sendData(OP_SCANLIMIT, 1);
   sendData(OP_INTENSITY, 7);
-  //delay(200);
+
+  //Serial.begin(9600);
 }
 
 void sendData(uint16_t cmd, uint8_t data)
-// Send a simple command to the MAX7219
-// using the hardware SPI interface
+//Send a simple command to the MAX7219 using the hardware SPI interface
 {
   uint16_t x = (cmd << 8) | data;
   SPI.beginTransaction(SPISettings(8000000, MSBFIRST, SPI_MODE0)); //8 MHz
@@ -158,37 +165,68 @@ void loop()
   //Handle potentiometer and 7-segment displays
   oldPotRead = potRead;
   potRead = analogRead(potPin);
-  potRead = analogRead(potPin);
-  if (potRead < (oldPotRead - 6) || potRead > (oldPotRead + 6)) 
+  if(abs(potRead - oldPotRead) < 15) 
   {
-    //potRead = map(potRead, 0, 1023, 0, 100);
-    if (potRead < 800) 
-    {
-      testDisplay = map(potRead, 0, 800, 45, 99);
-    }
-    else 
-    {
-      testDisplay = pow((double)potRead - 760.0, 2.0)/600.0 + 97.0;//map(potRead, 70, 100, 100, 990);
-    }
-  }
-  //float val = (float)potRead / 1023;
-
-  if (testDisplay > 990) 
-  {
-    testDisplay = 77;
-  }
-  testDisplay = 60;
-  if (testDisplay < 100) 
-  {
-    sendData(OP_DIGIT0, 128 + testDisplay / 10);
-    sendData(OP_DIGIT1, testDisplay % 10);
-  }
-  else 
-  {
-    sendData(OP_DIGIT0, testDisplay / 100);
-    sendData(OP_DIGIT1, (testDisplay % 100) / 10);
+    potRead = oldPotRead;
   }
   
+  int normPotRead = min(9, (int)map(potRead, 0, 1023, 0, 10));
+
+  //Potentiometer settings
+  //4.7, 4.8, 4.9, 5.0, 5.1, 6.9, 7.0, 7.1, 11, 12
+  switch(normPotRead) 
+  {
+    case 0:
+      sendData(OP_DIGIT1, 128 + 4);
+      sendData(OP_DIGIT0, 7);
+      clickSpeed = 4.7;
+      break;
+    case 1:
+      sendData(OP_DIGIT1, 128 + 4);
+      sendData(OP_DIGIT0, 8);
+      clickSpeed = 4.8;
+      break;
+    case 2:
+      sendData(OP_DIGIT1, 128 + 4);
+      sendData(OP_DIGIT0, 9);
+      clickSpeed = 4.9;
+      break;
+    case 3:
+      sendData(OP_DIGIT1, 128 + 5);
+      sendData(OP_DIGIT0, 0);
+      clickSpeed = 5.0;
+      break;
+    case 4:
+      sendData(OP_DIGIT1, 128 + 5);
+      sendData(OP_DIGIT0, 1);
+      clickSpeed = 5.1;
+      break;
+    case 5:
+      sendData(OP_DIGIT1, 128 + 6);
+      sendData(OP_DIGIT0, 9);
+      clickSpeed = 6.9;
+      break;
+    case 6:
+      sendData(OP_DIGIT1, 128 + 7);
+      sendData(OP_DIGIT0, 0);
+      clickSpeed = 7.0;
+      break;
+    case 7:
+      sendData(OP_DIGIT1, 128 + 7);
+      sendData(OP_DIGIT0, 1);
+      clickSpeed = 7.1;
+      break;
+    case 8:
+      sendData(OP_DIGIT1, 1);
+      sendData(OP_DIGIT0, 1);
+      clickSpeed = 11;
+      break;
+    case 9:
+      sendData(OP_DIGIT1, 1);
+      sendData(OP_DIGIT0, 2);
+      clickSpeed = 12;
+      break;
+  }
   
   //Handle USB clicking
   Usb.Task();
@@ -203,7 +241,7 @@ void loop()
   //Switching modes
   if (leftPedalState == LOW && rightPedalState == LOW) 
   {
-    if ((currentMillis - startSwitchTime) >= 4000) 
+    if ((currentMillis - startSwitchTime) >= 3000) 
     {
       autoClickMode = !autoClickMode;
       startSwitchTime = currentMillis;
@@ -236,7 +274,7 @@ void loop()
     {
       leftPedalPressed = true;
       if (!Mouse.isPressed(MOUSE_LEFT) 
-          && (currentMillis - lastLeftPressTime) >= pgm_read_byte_near(clickTimesArray + iterator)) 
+          && (currentMillis - lastLeftPressTime) >= pgm_read_byte_near(clickTimesArray + iterator) * ARRAY_CLICK_SPEED/clickSpeed) 
       {
         Mouse.press(MOUSE_LEFT);
         lastLeftPressTime = currentMillis;
@@ -244,7 +282,7 @@ void loop()
         iterator++;
         digitalWrite(leftClickLedPin, HIGH);
       }
-      else if ((currentMillis - lastLeftPressTime) >= pgm_read_byte_near(clickTimesArray + iterator)) 
+      else if ((currentMillis - lastLeftPressTime) >= pgm_read_byte_near(clickTimesArray + iterator) * ARRAY_CLICK_SPEED/clickSpeed) 
       {
         Mouse.release(MOUSE_LEFT);
         lastLeftPressTime = currentMillis;
@@ -258,7 +296,7 @@ void loop()
       leftPedalPressed = false;
 
       if (Mouse.isPressed(MOUSE_LEFT) 
-          && (currentMillis - lastLeftPressTime) >= pgm_read_byte_near(clickTimesArray + iterator)) 
+          && (currentMillis - lastLeftPressTime) >= pgm_read_byte_near(clickTimesArray + iterator) * ARRAY_CLICK_SPEED/clickSpeed) 
       {
         Mouse.release(MOUSE_LEFT);
         iterator++;
@@ -271,14 +309,14 @@ void loop()
     {
       rightPedalPressed = true;
       if (!Mouse.isPressed(MOUSE_RIGHT) 
-          && (currentMillis - lastRightPressTime) >= pgm_read_byte_near(clickTimesArray + iterator)) 
+          && (currentMillis - lastRightPressTime) >= pgm_read_byte_near(clickTimesArray + iterator) * ARRAY_CLICK_SPEED/clickSpeed) 
       {
         Mouse.press(MOUSE_RIGHT);
         lastRightPressTime = currentMillis;
         iterator++;
         digitalWrite(rightClickLedPin, HIGH);
       }
-      else if ((currentMillis - lastRightPressTime) >= pgm_read_byte_near(clickTimesArray + iterator)) 
+      else if ((currentMillis - lastRightPressTime) >= pgm_read_byte_near(clickTimesArray + iterator) * ARRAY_CLICK_SPEED/clickSpeed) 
       {
         Mouse.release(MOUSE_RIGHT);
         lastRightPressTime = currentMillis;
@@ -291,7 +329,7 @@ void loop()
       rightPedalPressed = false;
 
       if (Mouse.isPressed(MOUSE_RIGHT) 
-          && (currentMillis - lastRightPressTime) >= pgm_read_byte_near(clickTimesArray + iterator)) 
+          && (currentMillis - lastRightPressTime) >= pgm_read_byte_near(clickTimesArray + iterator) * ARRAY_CLICK_SPEED/clickSpeed) 
       {
         Mouse.release(MOUSE_RIGHT);
         iterator++;
