@@ -142,9 +142,10 @@ void setup()
   delay(200);
   //Set up 7-segment display
   sendData(OP_SHUTDOWN, 1);
-  sendData(OP_DECODEMODE, 0xff);
+  sendData(OP_DECODEMODE, 0xFF);
   sendData(OP_SCANLIMIT, 1);
   sendData(OP_INTENSITY, 7);
+  sendData(OP_DISPLAYTEST, 0);
 
   //Serial.begin(9600);
 }
