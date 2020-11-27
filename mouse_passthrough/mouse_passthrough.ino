@@ -1,5 +1,6 @@
 //USB host mouse from USB Host Shield Library. Install using Library Manager
-#include <hidboot.h>
+//#include <hidboot.h>
+#include <hiduniversal.h>
 
 //USB device mouse library included with Arduino IDE 1.8.5
 #include <Mouse.h>
@@ -72,22 +73,25 @@ const double ARRAY_CLICK_SPEED = 4.7;
 //TEST
 //int testDisplay = 0;
 
-class MouseRptParser : public MouseReportParser
-{
-protected:
-    void Parse(USBHID *hid, bool is_rpt_id, uint8_t len, uint8_t *buf);
+class MouseRptParser : public HIDReportParser {
+  public:
+    virtual void Parse(USBHID *hid, bool is_rpt_id, uint8_t len, uint8_t *buf);
 };
 
-void MouseRptParser::Parse(USBHID *hid, bool is_rpt_id, uint8_t len, uint8_t *buf)
-{
-  //On error - return
-  if (buf[2] == 1)
-    return;
-
-  if (len > 2) {
+void MouseRptParser::Parse(USBHID *hid, bool is_rpt_id, uint8_t len, uint8_t *buf) {
+  //Serial.println(len);
+  //Serial.println("");
+  if (len > 3) {
+    /*
+    for (int i = 0; i < 5; i++) {
+      Serial.print(buf[i]);
+      Serial.print(", ");
+    }
+    Serial.println("");*/
     uint8_t mouseRpt[4];
 
-    mouseRpt[0] = buf[0];
+    //Buttons
+    mouseRpt[0] = buf[1];
     if (leftPedalPressed || rightPedalPressed) 
     {
       mouseRpt[0] = 0;
@@ -103,15 +107,21 @@ void MouseRptParser::Parse(USBHID *hid, bool is_rpt_id, uint8_t len, uint8_t *bu
         }
       }
     }
-    mouseRpt[1] = buf[1];
-    mouseRpt[2] = buf[2];
-    mouseRpt[3] = 0;
+
+    //X and Y
+    mouseRpt[1] = buf[2];
+    mouseRpt[2] = buf[3];
+
+    //Scroll
+    mouseRpt[3] = buf[4];
+
+    //Send report
     HID().SendReport(1,mouseRpt,sizeof(mouseRpt));
   }
 }
 
-USB     Usb;
-HIDBoot<USB_HID_PROTOCOL_MOUSE>    HidMouse(&Usb);
+USB Usb;
+HIDUniversal Hid(&Usb);
 
 MouseRptParser Prs;
 
@@ -135,7 +145,7 @@ void setup()
   }
   //delay( 200 );
 
-  HidMouse.SetReportParser(0, &Prs);
+  Hid.SetReportParser(0, &Prs);
 
   Mouse.begin();
 
