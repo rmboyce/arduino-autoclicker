@@ -1,5 +1,4 @@
 //USB host mouse from USB Host Shield Library. Install using Library Manager
-//#include <hidboot.h>
 #include <hiduniversal.h>
 
 //USB device mouse library included with Arduino IDE 1.8.5
@@ -70,28 +69,20 @@ int oldPotRead = 200;
 double clickSpeed = 4.8;
 const double ARRAY_CLICK_SPEED = 4.7;
 
-//TEST
-//int testDisplay = 0;
-
 class MouseRptParser : public HIDReportParser {
   public:
     virtual void Parse(USBHID *hid, bool is_rpt_id, uint8_t len, uint8_t *buf);
 };
 
 void MouseRptParser::Parse(USBHID *hid, bool is_rpt_id, uint8_t len, uint8_t *buf) {
-  //Serial.println(len);
+  //Serial.println(len - 1);
   //Serial.println("");
-  if (len > 3) {
-    /*
-    for (int i = 0; i < 5; i++) {
-      Serial.print(buf[i]);
-      Serial.print(", ");
-    }
-    Serial.println("");*/
+  if (len - 1 > 3) {
     uint8_t mouseRpt[4];
 
     //Buttons
     mouseRpt[0] = buf[1];
+    //Change the hid report if the pedals are pressed
     if (leftPedalPressed || rightPedalPressed) 
     {
       mouseRpt[0] = 0;
@@ -114,14 +105,29 @@ void MouseRptParser::Parse(USBHID *hid, bool is_rpt_id, uint8_t len, uint8_t *bu
 
     //Scroll
     mouseRpt[3] = buf[4];
-
-    //Send report
+    
+    //Send hid report
     HID().SendReport(1,mouseRpt,sizeof(mouseRpt));
   }
 }
 
+class HIDUniversalFixed : public HIDUniversal {
+  public:
+    HIDUniversalFixed(USB *p) : HIDUniversal(p) {}
+    virtual bool BuffersIdentical(uint8_t len, uint8_t *buf1, uint8_t *buf2);
+};
+
+bool HIDUniversalFixed::BuffersIdentical(uint8_t len, uint8_t *buf1, uint8_t *buf2) {
+  for(uint8_t i = 0; i < len; i++)
+    if(buf1[i] != buf2[i])
+      return false;
+  if (buf1[4] != 0)
+    return false;
+  return true;
+}
+
 USB Usb;
-HIDUniversal Hid(&Usb);
+HIDUniversalFixed Hid(&Usb);
 
 MouseRptParser Prs;
 
@@ -143,13 +149,13 @@ void setup()
   if (Usb.Init() == -1) {
   //  Serial.println("USB host shield did not start.");
   }
-  //delay( 200 );
 
   Hid.SetReportParser(0, &Prs);
 
   Mouse.begin();
 
   delay(200);
+  
   //Set up 7-segment display
   sendData(OP_SHUTDOWN, 1);
   sendData(OP_DECODEMODE, 0xFF);
